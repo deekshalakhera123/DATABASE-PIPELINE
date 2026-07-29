@@ -20,7 +20,9 @@ from static import result_dict, word_number_dict
 
 IGR_EXCEL   = Path(r".\sample_data.xlsx")
 VILLAGE_DIR = Path(r".\Mumbai IGR Village Directory.xlsx")
-OUTPUT_PATH = Path(r"Sample data for llm.xlsx")
+OUTPUT_PATH_SALE = Path(r"Sample Sale data for llm.xlsx")
+OUTPUT_PATH_LEASE = Path(r"Sample Lease data for llm.xlsx")
+OUTPUT_PATH_OTHER = Path(r"Sample Other data for llm.xlsx")
 
 # NOTE: registrationdate and dateofexecution have mixed formats per file.
 #   True  → parse as MM/DD/YYYY  (American)
@@ -137,11 +139,175 @@ def run_stage1() -> pd.DataFrame:
     df = categorise(df)
     df = map_villages(df, VILLAGE_DIR)
 
+
+    def floor(string):
+        try:
+
+            string=re.sub(r'[\'"]', '', str(string))
+            string = re.sub(r'\s+', ' ', string)
+            floor = re.search(".{15}(मजल्यावर|मजला|मजल्या|माळा|माला|फ्लोअर|मजाल्या|मजलया)", string)
+            floor = floor.group(0)
+        except:
+
+            return None
+        try:
+            if "माळा" in floor:
+                floor = re.search("माळा(.{15})", string)
+                floor = floor.group(0)
+        except:
+            return None
+        return floor
+
+    def flat_no(string):
+
+        if pd.isna(string):
+            return None
+
+
+        string = re.sub(r'\s+', ' ', string)
+        words_list = ['सदनिका ', 'अपार्टमेंट ', 'अपार्टमेन्ट ','फ्लॅट', 'दुकाम', 'ऑॅफीस','ऑफीस','ऑफीस', 'ऑफिस', 'युनिट ', 'शॉप', 'प्रिमायसेस', 'दुकान','रूम','रुम']
+        pattern="({}).*?(?:[0-9]+)".format("|".join(words_list))
+        match = re.search(pattern, string)
+        if match:
+
+            captured_text = match.group(0)
+            return captured_text
+
+    df['UNIT_FLOOR']=df['propertydescription'].apply(floor)
+    df['UNIT_NO']=df['propertydescription'].apply(flat_no)
+
+
+
+    def floor_clean2(string):
+
+        try:
+            string = re.sub(r'\s+', ' ', string)
+            if "माळा नं" in string:
+                majla_string = re.search(r"माळा नं: ([^\s]+)", string)
+                majla_string = majla_string.group(1).strip(",")
+                return majla_string
+
+            elif "मजला" in string or "मजल्या" in string:
+                majla_string = str(string)
+                majla_string = (majla_string.replace(' वा','').replace(' था','').replace(' रा','').replace(' ला','').replace(',',' ').strip())
+                majla_string = majla_string.split(' ')[-2:]
+                majla_string = ' '.join(majla_string).strip(",")
+                return majla_string
+
+            elif "फ्लोअर" in string:
+                s = string.split(" ")
+                index = s.index("फ्लोअर")
+                majila_string=" ".join(s[index-1:index+1])
+                return majila_string
+
+            elif "लेवल" in string :
+                majla_string = str(string)
+                majla_string=majla_string.split(",")
+                majla_string=[ele for ele in majla_string if "लेवल" in ele]
+                return majla_string[0].strip(",")
+
+            else:
+                return string
+        except:
+            return None
+
+    def flat_clean2(string):
+        if string:
+
+            string = re.sub(r'\s+', ' ', string)
+            string = str(string).split(",")
+            string = "".join(string[0])
+            matches = re.findall(r'\d+', string)
+            if matches:
+                last_number = matches[0]
+                output = string[:string.rindex(last_number) + len(last_number)].strip()
+                return output
+        else:
+            pass
+
+    df['floor_clean']=df['UNIT_FLOOR'].apply(floor_clean2)
+    df['unit_clean']=df['UNIT_NO'].apply(flat_clean2)
+
+
+
+    def assign_property_type(property_string, floor_string):
+
+        if not isinstance(property_string, str):
+            return None
+
+        property_string = property_string.strip()
+        floor_string = floor_string.strip() if isinstance(floor_string, str) else ""
+
+        keywords = {
+            'Apartment': ['अपार्टमेंट','अपार्टमेन्ट'],
+            'Row_House': ['रो हाऊस','रो हाउस'],
+            'Bunglow': ['बंगलो','बंगला'],
+            'Warehouse': ['गोडाऊन'],
+            'Industrial':['इंडस्ट्रियल'],
+            'Office': ['ऑफीस','ऑॅफीस','ऑफिस'],
+            'Shop': ['गाळा','गाला','गाळे','शॉप','शॉपिंग','दुकाने','दुकान'],
+            'Commercial': ['कमर्शियल','कमर्शिअल'],
+            'Flat': ['सदनिका','सदनिकेचे','सदनिक','सदनीका','सदनिकाचे',
+                    'फ्लॅट','फ़लॅट','फ़लॅटचे','फलॅट','फ्लेट','फ्लैट']
+        }
+
+        for prop_type, prop_keywords in keywords.items():
+            for keyword in prop_keywords:
+                if keyword in property_string:
+                    return prop_type
+
+        if any(x in property_string for x in ['युनिट','यूनिट','युनीट']):
+            if any(x in property_string for x in ['गाळा','दुकान','शॉप']):
+                return 'Shop'
+            if floor_string:
+                return 'Flat'
+            return 'Unit'
+
+        if 'चाळ' in property_string:
+            return 'Chawl'
+
+        if any(x in property_string for x in ['रूम','रुम']):
+            return 'Room'
+
+        return None
+    
+    df['Property Type'] = df.apply(
+        lambda row: assign_property_type(row['propertydescription'], row['floor_clean']),
+        axis=1
+    )
+
+
+    # Operation for Unit number column
+    df['unit_clean'] = df['unit_clean'].str.extract(r'(\d+)', expand=False).astype(float).astype(pd.Int64Dtype(), errors='ignore')
+
+
+    mask = ~df['unit_clean'].isnull() & ~df['Property Type'].isnull()
+
+
+    df['unit_clean'] = np.where(mask,
+                                        df['Property Type'].astype(str) + ' no. ' + df['unit_clean'].astype(str),
+                                        df['unit_clean'].astype(str))
+
+    df.drop(columns=['UNIT_FLOOR', 'UNIT_NO'],inplace=True)
+    df.rename(columns={'registrationdate': 'Transaction Date', 'consideration_amt': 'Agreement Price(INR)', 'unit_clean': 'Unit No', 'floor_clean': 'Floor No',
+                    'docname': 'Document Type', 'propertydescription': 'Bhumapan','village_Name_Eng': 'IGR Village', 
+                    'sroname': 'SRO Name', 'docno': 'Document No', 'marketvalue': 'Bajarbhav','sellerparty':'Seller Name','purchaserparty':'Purchaser Name'}, inplace=True)
+
+
+
     print(f"\nStage 1 complete. Shape: {df.shape}")
     print(df['property_category'].value_counts())
-
-    df.to_excel(OUTPUT_PATH, index=False)
-    print(f"Saved → {OUTPUT_PATH}")
+    df_Sale = df[df['property_category'] == 'Sale']
+    df_lease = df[df['property_category'] == 'Lease']
+    df_other = df[df['property_category'] == 'Other']
+    
+    # df.to_excel(OUTPUT_PA TH, index=False)
+    df_Sale.to_excel(OUTPUT_PATH_SALE, index=False)
+    df_lease.to_excel(OUTPUT_PATH_LEASE, index=False)
+    df_other.to_excel(OUTPUT_PATH_OTHER, index=False)
+    print(f"Saved → {OUTPUT_PATH_SALE}")
+    print(f"Saved → {OUTPUT_PATH_LEASE}")
+    print(f"Saved → {OUTPUT_PATH_OTHER}")
     return df
 
 

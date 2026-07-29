@@ -26,13 +26,13 @@ warnings.filterwarnings("ignore")
 # =============================================================================
 
 CITY               = "mumbai"   # "mumbai" | "thane" | "pune"
-INPUT_PATH         = Path(r"E:\IGR New Approach - DB1\Making of DB1 - Pune, Mumbai, Thane\Andheri data for llm.xlsx")
-RERA_GRAND_PATH    = Path(r"E:\IGR New Approach - DB1\Making of DB1 - Pune, Mumbai, Thane\Excels Required for DB1\mumbai RERA GRAND EXCEL VERSION.xlsx")
-RERA_KEYWORDS_PATH = Path(r"E:\IGR New Approach - DB1\Making of DB1 - Pune, Mumbai, Thane\Excels Required for DB1\RERA_All_Keywords_BHK_Prop_Type.xlsx")
-COORDINATES_PATH   = Path(r"E:\IGR New Approach - DB1\Making of DB1 - Pune, Mumbai, Thane\Excels Required for DB1\project address and its coordinates.xlsx")
-VILLAGE_DIR_PATH   = Path(r"E:\IGR New Approach - DB1\Making of DB1 - Pune, Mumbai, Thane\Excels Required for DB1\Mumbai IGR Village Directory.xlsx")
-POSTAL_CSV_PATH    = Path(r"E:\IGR New Approach - DB1\Making of DB1 - Pune, Mumbai, Thane\Excels Required for DB1\postal_pincode.csv")
-OUTPUT_PATH        = Path(r".\testing file db1.xlsx")
+INPUT_PATH         = Path(r"manual processed Sale data for manual.xlsx")
+RERA_GRAND_PATH    = Path(r".\Excels Required for DB1\mumbai RERA GRAND EXCEL VERSION.xlsx")
+RERA_KEYWORDS_PATH = Path(r".\Excels Required for DB1\RERA_All_Keywords_BHK_Prop_Type.xlsx")
+COORDINATES_PATH   = Path(r".\Excels Required for DB1\project address and its coordinates.xlsx")
+VILLAGE_DIR_PATH   = Path(r".\Excels Required for DB1\Mumbai IGR Village Directory.xlsx")
+POSTAL_CSV_PATH    = Path(r".\Excels Required for DB1\postal_pincode.csv")
+OUTPUT_PATH        = Path(r"testing file db1.xlsx")
 
 BHK_MAX_DIFF = 5
 
@@ -179,17 +179,14 @@ def rename_columns(df: pd.DataFrame) -> pd.DataFrame:
     df.rename(columns={
         'areaname':            'village',
         'srocode':             'sro_code',
-        'sroname':             'SRO Name',
-        'docno':               'Document No',
-        'consideration_amt':   'Agreement Price',
-        'marketvalue':         'bajarbhav',
-        'propertydescription': 'property_description',
-        'registrationdate':    'Transaction Date',
-        'sellerparty':         'Seller Name',
-        'purchaserparty':      'Purchaser Name',
-        'flat_no':             'Unit No',
+        'Bhumapan':             'property_description',
         'Property Type':       'property_type_raw',
-        'floor_no':            'Floor No',
+        'Agreement Price(INR)':  'agreement_price',
+        'Terrace_Area_sqmt':   'terrace_sqmt',
+        'Balcony_Area_sqmt':        'balcony_sqmt',
+        "Modified_Project_Name_1": "project_name",
+
+
     }, inplace=True)
     return df
 
@@ -199,7 +196,7 @@ def process_unit_and_floor(df: pd.DataFrame) -> pd.DataFrame:
     Build 'Flat no. 901' strings from unit number and property_type_raw.
     Uses np.where to avoid Int64 / object dtype conflicts.
     """
-    df['Transaction Type'] = df['docname'].map(result_dict.get)
+    df['Transaction Type'] = df['Document Type'].map(result_dict.get)
 
     unit_numeric = (
         df['Unit No'].astype(str)
@@ -249,6 +246,8 @@ def clean_sale_data(dataframe: pd.DataFrame) -> pd.DataFrame:
     print(f"Before dedup: {dataframe.shape}")
     dataframe['property_description'] = dataframe['property_description'].str.title()
 
+    print("columns in dataframe : ",dataframe.columns)
+
     dataframe = dataframe.drop_duplicates(
         subset=['village', 'sro_name', 'document_no', 'transaction_type',
                 'property_description', 'transaction_date', 'agreement_price'],
@@ -265,9 +264,11 @@ def clean_sale_data(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     dataframe = _infer_floor_from_unit(dataframe)
 
-    dataframe['igr_village'] = np.where(
-        dataframe['igr_village'].isna(), dataframe['location'], dataframe['igr_village']
-    )
+    # dataframe['igr_village'] = np.where(
+    #     dataframe['igr_village'].isna(), dataframe['location'], dataframe['igr_village']
+    # )
+
+    dataframe['location'] = dataframe['igr_village']
     dataframe['transaction_type'] = np.where(
         dataframe['transaction_type'].isna(), 'Sale Agreement', dataframe['transaction_type']
     )
@@ -847,6 +848,48 @@ def run_stage3(city: str = CITY) -> pd.DataFrame:
 
     df = pd.read_excel(INPUT_PATH)
 
+    import numpy as np
+
+    df['net_carpet_area_sqmt'] = np.nan
+
+    # 1️⃣ Carpet
+    mask = df['Carpet_Area_sqmt'].notna()
+    df.loc[mask, 'net_carpet_area_sqmt'] = (
+        df.loc[mask, 'Carpet_Area_sqmt'].values
+    )
+
+    # 2️⃣ Built-up (÷1.2)
+    mask = (
+        df['net_carpet_area_sqmt'].isna() &
+        df['BuildUp_Area_sqmt'].notna()
+    )
+    df.loc[mask, 'net_carpet_area_sqmt'] = (
+        df.loc[mask, 'BuildUp_Area_sqmt'].values / 1.3
+    )
+
+    # 3️⃣ Saleable (÷1.35)
+    mask = (
+        df['net_carpet_area_sqmt'].isna() &
+        df['Saleable_Area_sqmt'].notna()
+    )
+    df.loc[mask, 'net_carpet_area_sqmt'] = (
+        df.loc[mask, 'Saleable_Area_sqmt'].values / 1.45
+    )
+
+    # 4️⃣ Other
+    mask = (
+        df['net_carpet_area_sqmt'].isna() &
+        df['Other_Area_sqmt'].notna()
+    )
+    df.loc[mask, 'net_carpet_area_sqmt'] = (
+        df.loc[mask, 'Other_Area_sqmt'].values
+    )
+
+    # Round
+    df['net_carpet_area_sqmt'] = (
+        df['net_carpet_area_sqmt'].round(2)
+    )
+
     # 3.1 Rename & reshape
     df = rename_columns(df)
     df = process_unit_and_floor(df)
@@ -856,6 +899,8 @@ def run_stage3(city: str = CITY) -> pd.DataFrame:
 
     # 3.2 Split by category
     sale_df, lease_df, other_df = split_by_category(df)
+
+    print("columns in sale_df : ",sale_df.columns)
 
     # 3.3 Clean sale data
     final_village = clean_sale_data(sale_df)

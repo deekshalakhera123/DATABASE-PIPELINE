@@ -361,6 +361,51 @@ def merge_all_chunks(output_dir, final_output_path):
 
     dfs = [pd.read_excel(f) for f in files_sorted]
     final_df = pd.concat(dfs, ignore_index=True)
+
+    import re
+    import numpy as np
+    SQMT_REGEX = r"(चोरस मीटर|चो. मी.|स्क्वे मीटर|स्के. मीटर.|चो.मि.|sq मीटर्स|स्के मी|चो. मी.|चौ\.?\s*मी|चौ\.?\s*मीटर|चौरस?\s*मीटर|चौ\.?\s*मि.|स्क्वेअर मीटर|चौ . मी|चौ .मी|चो मी|स्क्वेर मीटर|चो. मीटर|स्केव्यर मीटर|चौरस मिटर|चो.मीटर|चौ\.?\sमि|चो?\s*मिटर|चो?\s*मीटर|चौ\.?\sमि|चौ?\s*मिटर|चौरस?\s*मी|चौ\.?\s*मि.|स्केवर?\s*मीटर|चौ .?\s*मीटर|स्क्वायर?\s*मीटर|sqm|sqmt|square\s*meter)"
+    FOOT_REGEX = r"(फुट|फु|फीट|फू|फिट|फ़ूट|फ़ुट|फ़ु|फ़ूट|फ़ुट|फूट|फ़ूत|स्क.फ्ट|रेरा कारपेट|रेरा कार्पेट|चौ फट|चो फी|चौरस फ़ीट)"
+
+    def normalize_decimal_spacing(text):
+        if not isinstance(text, str):
+            return text
+        # Fix cases like "193. 122" → "193.122"
+        return re.sub(r"(\d+)\.\s+(\d+)", r"\1.\2", text)
+
+    def carpet_to_sqmt(val):
+        if not isinstance(val, str):
+            return np.nan
+
+        val = val.replace(",", "")
+        val = normalize_decimal_spacing(val)
+
+        # 1️⃣ If SQMT present → extract sqmt number
+        m_sqmt = re.search(
+            rf"(\d+(?:\.\d+)?)[^\d]*{SQMT_REGEX}",
+            val,
+            flags=re.I
+        )
+        if m_sqmt:
+            return float(m_sqmt.group(1))
+
+        # 2️⃣ Else if only SQFT present → convert
+        m_sqft = re.search(
+            rf"(\d+(?:\.\d+)?)[^\d]*{FOOT_REGEX}",
+            val,
+            flags=re.I
+        )
+        if m_sqft:
+            return float(m_sqft.group(1)) / 10.764
+
+        return np.nan
+    final_df["Carpet_Area_sqmt"] = final_df["Carpet_Area"].apply(carpet_to_sqmt)
+    final_df['BuildUp_Area_sqmt']=final_df['BuildUp_Area'].apply(carpet_to_sqmt)
+    final_df['Saleable_Area_sqmt']=final_df['Saleable_Area'].apply(carpet_to_sqmt)
+    final_df['Terrace_Area_sqmt']=final_df['Terrace_Area'].apply(carpet_to_sqmt)
+    final_df['Balcony_Area_sqmt']=final_df['Balcony_Area'].apply(carpet_to_sqmt)
+    final_df['Other_Area_sqmt']=final_df['Other_Area'].apply(carpet_to_sqmt)
+
     Path(final_output_path).parent.mkdir(parents=True, exist_ok=True)
     final_df.to_excel(final_output_path, index=False)
     print(f"Final merged Excel saved to: {final_output_path}")
@@ -370,12 +415,12 @@ def merge_all_chunks(output_dir, final_output_path):
 # =========================
 if __name__ == "__main__":
     # Inputs
-    INPUT_EXCEL_PATH = r"Andheri data for llm.xlsx"
+    INPUT_EXCEL_PATH = r"Sample Sale data for llm.xlsx"
     INPUT_SHEET_NAME = "Sheet1"
     TEMP_CSV_PATH    = "temp_bhumapan_data.csv"
 
     OUTPUT_CHUNK_DIR   = r"extracted_chunks"
-    FINAL_OUTPUT_PATH  = r"Batch1_LLM_Complete.xlsx"
+    FINAL_OUTPUT_PATH  = r"llm processed Sale data for manual.xlsx"
 
     # Prepare temp CSV from Excel
     df_src = pd.read_excel(INPUT_EXCEL_PATH, sheet_name=INPUT_SHEET_NAME)
