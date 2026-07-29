@@ -57,9 +57,13 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 import google.generativeai as genai
+
+# Load .env from the same directory as this script (or any parent dir).
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 
 # =============================================================================
@@ -68,30 +72,31 @@ import google.generativeai as genai
 
 @dataclass(frozen=True)
 class Stage2Config:
-    input_excel_path: str = r"Sample Sale data for llm.xlsx"
-    input_sheet_name: str = "Sheet1"
-    temp_csv_path: str = "temp_bhumapan_data.csv"
+    input_excel_path: str = os.getenv("STAGE2_INPUT_EXCEL", r"Sample Sale data for llm.xlsx")
+    input_sheet_name: str = os.getenv("STAGE2_INPUT_SHEET", "Sheet1")
+    temp_csv_path: str = os.getenv("STAGE2_TEMP_CSV", "temp_bhumapan_data.csv")
 
-    output_chunk_dir: str = r"extracted_chunks"
-    final_output_path: str = r"llm processed Sale data for manual.xlsx"
+    output_chunk_dir: str = os.getenv("STAGE2_CHUNK_DIR", r"extracted_chunks")
+    final_output_path: str = os.getenv("STAGE2_FINAL_OUTPUT", r"llm processed Sale data for manual.xlsx")
 
-    model_name: str = "gemma-3-27b-it"  # or "gemini-1.5-flash"
-    chunk_size: int = 50
-    max_workers: int = 1
-    resume: bool = True
-    retries: int = 3
+    model_name: str = os.getenv("STAGE2_MODEL_NAME", "gemma-3-27b-it")
+    chunk_size: int = int(os.getenv("STAGE2_CHUNK_SIZE", "50"))
+    max_workers: int = int(os.getenv("STAGE2_MAX_WORKERS", "1"))
+    resume: bool = os.getenv("STAGE2_RESUME", "True").strip().lower() != "false"
+    retries: int = int(os.getenv("STAGE2_RETRIES", "3"))
 
 
 DEFAULT_CONFIG = Stage2Config()
 
-# NOTE: never hardcode API keys in source. Set GOOGLE_API_KEY in your
-# environment (or a .env file loaded before this script runs).
+# Load API key from environment (populated by .env above).
+# Never hardcode API keys in source.
 _api_key = os.getenv("GOOGLE_API_KEY")
 if not _api_key:
     raise RuntimeError(
-        "GOOGLE_API_KEY environment variable is not set. "
-        "Export it before running this script, e.g.:\n"
-        "  export GOOGLE_API_KEY=your-key-here"
+        "GOOGLE_API_KEY is not set.\n"
+        "Add it to MUMBAI/DB1/.env:\n"
+        "  GOOGLE_API_KEY=your-key-here\n"
+        "or export it in your shell before running this script."
     )
 genai.configure(api_key=_api_key)
 

@@ -7,6 +7,7 @@
 # =============================================================================
 
 import ast
+import os
 import re
 import warnings
 from dataclasses import dataclass
@@ -14,12 +15,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 from geopy.geocoders import ArcGIS
 from joblib import Parallel, delayed
 
 from static import result_dict, word_number_dict
 
 warnings.filterwarnings("ignore")
+
+# Load .env from the same directory as this script.
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 
 # =============================================================================
@@ -28,15 +33,15 @@ warnings.filterwarnings("ignore")
 
 @dataclass(frozen=True)
 class Stage3Config:
-    city: str = "mumbai"  # "mumbai" | "thane" | "pune"
-    input_path: Path = Path(r"manual processed Sale data for manual.xlsx")
-    rera_grand_path: Path = Path(r".\Excels Required for DB1\mumbai RERA GRAND EXCEL VERSION.xlsx")
-    rera_keywords_path: Path = Path(r".\Excels Required for DB1\RERA_All_Keywords_BHK_Prop_Type.xlsx")
-    coordinates_path: Path = Path(r".\Excels Required for DB1\project address and its coordinates.xlsx")
-    village_dir_path: Path = Path(r".\Excels Required for DB1\Mumbai IGR Village Directory.xlsx")
-    postal_csv_path: Path = Path(r".\Excels Required for DB1\postal_pincode.csv")
-    output_path: Path = Path(r"sample_file_for_db1.xlsx")
-    bhk_max_diff: float = 5
+    city: str = os.getenv("STAGE3_CITY", "mumbai")  # "mumbai" | "thane" | "pune"
+    input_path: Path = Path(os.getenv("STAGE3_INPUT_PATH", r"manual processed Sale data for manual.xlsx"))
+    rera_grand_path: Path = Path(os.getenv("STAGE3_RERA_GRAND_PATH", r".\Excels Required for DB1\mumbai RERA GRAND EXCEL VERSION.xlsx"))
+    rera_keywords_path: Path = Path(os.getenv("STAGE3_RERA_KEYWORDS_PATH", r".\Excels Required for DB1\RERA_All_Keywords_BHK_Prop_Type.xlsx"))
+    coordinates_path: Path = Path(os.getenv("STAGE3_COORDINATES_PATH", r".\Excels Required for DB1\project address and its coordinates.xlsx"))
+    village_dir_path: Path = Path(os.getenv("STAGE3_VILLAGE_DIR_PATH", r".\Excels Required for DB1\Mumbai IGR Village Directory.xlsx"))
+    postal_csv_path: Path = Path(os.getenv("STAGE3_POSTAL_CSV_PATH", r".\Excels Required for DB1\postal_pincode.csv"))
+    output_path: Path = Path(os.getenv("STAGE3_OUTPUT_PATH", r"sample_file_for_db1.xlsx"))
+    bhk_max_diff: float = float(os.getenv("STAGE3_BHK_MAX_DIFF", "5"))
 
 
 DEFAULT_CONFIG = Stage3Config()

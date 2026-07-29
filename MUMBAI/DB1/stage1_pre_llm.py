@@ -12,8 +12,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 
 from static import result_dict, word_number_dict  # noqa: F401  (kept for parity with original module)
+
+# Load .env from the same directory as this script.
+load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 
 # =============================================================================
@@ -22,17 +26,20 @@ from static import result_dict, word_number_dict  # noqa: F401  (kept for parity
 
 @dataclass(frozen=True)
 class Stage1Config:
-    igr_excel: Path = Path(r".\sample_data.xlsx")
-    village_dir: Path = Path(r"D:\AI Agent Projects\DATABASE-PIPELINE\PUNE\DB1\Excels Required for DB1\Mumbai IGR Village Directory.xlsx")
-    output_sale: Path = Path(r"Sample Sale data for llm.xlsx")
-    output_lease: Path = Path(r"Sample Lease data for llm.xlsx")
-    output_other: Path = Path(r"Sample Other data for llm.xlsx")
+    igr_excel: Path = Path(os.getenv("STAGE1_IGR_EXCEL", r".\sample_data.xlsx"))
+    village_dir: Path = Path(os.getenv(
+        "STAGE1_VILLAGE_DIR",
+        r"D:\AI Agent Projects\DATABASE-PIPELINE\PUNE\DB1\Excels Required for DB1\Mumbai IGR Village Directory.xlsx"
+    ))
+    output_sale: Path = Path(os.getenv("STAGE1_OUTPUT_SALE", r"Sample Sale data for llm.xlsx"))
+    output_lease: Path = Path(os.getenv("STAGE1_OUTPUT_LEASE", r"Sample Lease data for llm.xlsx"))
+    output_other: Path = Path(os.getenv("STAGE1_OUTPUT_OTHER", r"Sample Other data for llm.xlsx"))
 
     # NOTE: registrationdate / dateofexecution formats vary per downloaded file.
     #   True  → parse as MM/DD/YYYY (American)
     #   False → parse as DD/MM/YYYY (Indian)
-    registration_date_mdy: bool = True
-    execution_date_mdy: bool = True
+    registration_date_mdy: bool = os.getenv("STAGE1_REGISTRATION_DATE_MDY", "True").strip().lower() != "false"
+    execution_date_mdy: bool = os.getenv("STAGE1_EXECUTION_DATE_MDY", "True").strip().lower() != "false"
 
 
 DEFAULT_CONFIG = Stage1Config()
