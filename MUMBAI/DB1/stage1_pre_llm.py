@@ -5,6 +5,7 @@
 # Output: Cleaned, categorised DataFrame → saved to Excel for LLM processing
 # =============================================================================
 
+from PIL import GimpGradientFile
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
+import os
 
 from static import result_dict, word_number_dict  # noqa: F401  (kept for parity with original module)
 
